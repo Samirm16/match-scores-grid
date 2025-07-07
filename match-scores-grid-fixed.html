@@ -1,0 +1,236 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Match Scores</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f3f4f6;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab {
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: #e5e7eb;
+      color: #111827;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background-color: #059669;
+      color: white;
+      font-weight: bold;
+    }
+
+    #search {
+      margin-bottom: 20px;
+      padding: 8px 12px;
+      width: 300px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+    }
+
+    .card-grid {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      justify-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      width: 250px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .field {
+      background-color: #4b5563;
+      color: white;
+      border-radius: 12px;
+      padding: 4px 12px;
+      font-size: 0.8em;
+      margin-bottom: 5px;
+    }
+
+    .completed {
+      background-color: #d1fae5;
+      color: #065f46;
+      border-radius: 12px;
+      padding: 4px 12px;
+      font-size: 0.8em;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 15px;
+    }
+
+    .completed::before {
+      content: "✔";
+    }
+
+    .score-row {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin-bottom: 10px;
+      width: 100%;
+    }
+
+    .score {
+      color: white;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.4em;
+      font-weight: bold;
+    }
+
+    .score.winner { background-color: #16a34a; }
+    .score.loser { background-color: #dc2626; }
+    .score.draw { background-color: #6b7280; }
+
+    .vs {
+      margin: 0 8px;
+      font-weight: bold;
+      font-size: 1em;
+      flex-shrink: 0;
+    }
+
+    .team {
+      font-size: 0.95em;
+      margin-top: 4px;
+      max-width: 100px;
+      word-wrap: break-word;
+      text-align: center;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-top: 12px;
+      font-size: 0.8em;
+      color: #4b5563;
+    }
+
+    .footer i {
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="tabs" id="tabs"></div>
+  <input type="text" id="search" placeholder="Search team name..." />
+  <div class="card-grid" id="cards"></div>
+
+  <script>
+    const sheetUrl = "https://docs.google.com/spreadsheets/d/11jU8VGp_Kg3S6SV6fh2VH1UdP4_f7bwmAzzsNKI71Qw/pub?output=csv";
+    let allData = [];
+    let activeTab = "All Results";
+
+    fetch(sheetUrl)
+      .then(res => res.text())
+      .then(text => {
+        const rows = text.trim().split("\n").map(row => row.split(","));
+        const headers = rows.shift();
+        allData = rows.map(row => {
+          const obj = {};
+          headers.forEach((h, i) => obj[h.trim()] = row[i]?.trim());
+          return obj;
+        });
+        renderTabs();
+        renderCards("All Results");
+      });
+
+    function renderTabs() {
+      const tabsDiv = document.getElementById("tabs");
+      const uniqueTimes = [...new Set(allData.map(d => d.Time))];
+      tabsDiv.innerHTML = '<div class="tab active" onclick="selectTab('All Results')">All Results</div>' +
+        uniqueTimes.map(time => `<div class="tab" onclick="selectTab('${time}')">${time}</div>`).join("");
+    }
+
+    function selectTab(time) {
+      activeTab = time;
+      document.querySelectorAll(".tab").forEach(tab => tab.classList.remove("active"));
+      document.querySelectorAll(".tab").forEach(tab => {
+        if (tab.textContent === time) tab.classList.add("active");
+      });
+      renderCards(time);
+    }
+
+    function renderCards(filterTime) {
+      const container = document.getElementById("cards");
+      container.innerHTML = "";
+      const searchValue = document.getElementById("search").value.toLowerCase();
+      const data = allData.filter(row => {
+        const matchTime = filterTime === "All Results" || row.Time === filterTime;
+        const matchSearch = !searchValue || row.TeamA.toLowerCase().includes(searchValue) || row.TeamB.toLowerCase().includes(searchValue);
+        return matchTime && matchSearch;
+      });
+
+      if (data.length === 0) {
+        container.innerHTML = "<p>No matches found.</p>";
+        return;
+      }
+
+      data.forEach(row => {
+        const scoreA = parseInt(row.ScoreA), scoreB = parseInt(row.ScoreB);
+        let classA = "draw", classB = "draw";
+        if (!isNaN(scoreA) && !isNaN(scoreB)) {
+          if (scoreA > scoreB) [classA, classB] = ["winner", "loser"];
+          else if (scoreA < scoreB) [classA, classB] = ["loser", "winner"];
+        }
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="field">${row.Field}</div>
+          <div class="completed">Completed</div>
+          <div class="score-row">
+            <div>
+              <div class="score ${classA}">${row.ScoreA}</div>
+              <div class="team">${row.TeamA}</div>
+            </div>
+            <div class="vs">vs</div>
+            <div>
+              <div class="score ${classB}">${row.ScoreB}</div>
+              <div class="team">${row.TeamB}</div>
+            </div>
+          </div>
+          <div class="footer">
+            <div><i>⏰</i> ${row.Time}</div>
+            <div><i>📅</i> ${row.Date}</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    document.getElementById("search").addEventListener("input", () => {
+      renderCards(activeTab);
+    });
+  </script>
+</body>
+</html>
